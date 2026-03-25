@@ -1,12 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Photon.Pun;
 
 public class PlayerController : MonoBehaviour
 {
     GameObject PlayerObj;
     ///Transform GunTransform;
     GameObject PlayerGun;
+    PhotonView photonView;
     [SerializeField]
     float MovementSpeed = 20.0f;
     [SerializeField]
