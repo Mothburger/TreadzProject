@@ -18,6 +18,7 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         PlayerObj = gameObject;
+        photonView = PlayerObj.GetComponent<PhotonView>();
         PlayerGun = this.gameObject.transform.GetChild(0).gameObject;
     }
 
