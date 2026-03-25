@@ -22,7 +22,7 @@ public class PlayerController : MonoBehaviour
     {
         if (Input.GetKey(KeyCode.W))
         {
-            transform.Translate(transform.up * MovementSpeed * Time.deltaTime);
+            transform.position += (transform.up * MovementSpeed * Time.deltaTime);
         }
         if (Input.GetKey(KeyCode.A))
         {
