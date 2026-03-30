@@ -9,6 +9,7 @@ public class PlayerController : MonoBehaviour
     ///Transform GunTransform;
     GameObject PlayerGun;
     PhotonView photonView;
+    private bool isDestroyed;
     [SerializeField]
     float StartingMovementSpeed = 0.0f;
     [SerializeField]
@@ -28,14 +29,19 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        if (isDestroyed)
+        {
+            return;
+        }
+
         if (photonView.IsMine == false && PhotonNetwork.IsConnected == true)
-    {
-        return;
-    }
+        {
+            return;
+        }
         if (Input.GetKeyUp(KeyCode.W))
-            {
+        {
             MovementSpeed = StartingMovementSpeed;
-            }
+        }
         if (Input.GetKey(KeyCode.W))
         {
             
@@ -68,7 +74,7 @@ public class PlayerController : MonoBehaviour
                 MovementSpeed = MaxMovementSpeed;
             }
             transform.position += (transform.up * -MovementSpeed * Time.deltaTime);
-            Debug.Log("Movement Speed:" + MovementSpeed);
+            //Debug.Log("Movement Speed:" + MovementSpeed);
             
         }
         if (Input.GetKey(KeyCode.Q))
@@ -81,5 +87,34 @@ public class PlayerController : MonoBehaviour
         }
         
     
+    }
+
+    [PunRPC]
+    public void DisappearTank()
+    {
+        if (isDestroyed)
+        {
+            return;
+        }
+
+        isDestroyed = true;
+        MovementSpeed = 0f;
+
+        foreach (var renderer in GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            renderer.enabled = false;
+        }
+
+        foreach (var collider in GetComponentsInChildren<Collider2D>(true))
+        {
+            collider.enabled = false;
+        }
+
+        foreach (var rigidbody in GetComponentsInChildren<Rigidbody2D>(true))
+        {
+            rigidbody.velocity = Vector2.zero;
+            rigidbody.angularVelocity = 0f;
+            rigidbody.simulated = false;
+        }
     }
 }
