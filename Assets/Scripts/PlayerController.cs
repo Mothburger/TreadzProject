@@ -28,6 +28,7 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        
         if (photonView.IsMine == false && PhotonNetwork.IsConnected == true)
     {
         return;
