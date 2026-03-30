@@ -38,16 +38,19 @@ public class Shooting : MonoBehaviour
             return;
         }
 
+        Vector2 fireDirection = firePoint.up;
         GameObject bullet = PhotonNetwork.Instantiate(
             bulletPrefab.name,
             firePoint.position,
-            firePoint.rotation
+            firePoint.rotation,
+            0,
+            new object[] { fireDirection.x, fireDirection.y, bulletSpeed }
         );
 
         Rigidbody2D rb = bullet.GetComponent<Rigidbody2D>();
         if (rb != null)
         {
-            rb.velocity = firePoint.up * bulletSpeed;
+            rb.velocity = fireDirection * bulletSpeed;
         }
 
         // Optional cleanup after a few seconds
