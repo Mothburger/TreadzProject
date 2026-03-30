@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Cinemachine;
 using Photon.Pun;
 
 public class PlayerController : MonoBehaviour
@@ -9,6 +10,8 @@ public class PlayerController : MonoBehaviour
     ///Transform GunTransform;
     GameObject PlayerGun;
     PhotonView photonView;
+    [SerializeField]
+    CinemachineVirtualCamera vcam;
     [SerializeField]
     float StartingMovementSpeed = 0.0f;
     [SerializeField]
@@ -21,6 +24,8 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         PlayerObj = gameObject;
+        vcam = GameObject.FindWithTag("VCam").GetComponent<CinemachineVirtualCamera>();
+        vcam.Follow = gameObject.transform;
         photonView = PlayerObj.GetComponent<PhotonView>();
         PlayerGun = this.gameObject.transform.GetChild(0).gameObject;
     }
@@ -28,7 +33,6 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
         if (photonView.IsMine == false && PhotonNetwork.IsConnected == true)
     {
         return;
