@@ -12,7 +12,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField]
     float StartingMovementSpeed = 0.0f;
     [SerializeField]
-    float MaxMovementSpeed = 25.0f;
+    float MaxMovementSpeed = 5.0f;
     float MovementSpeed = 0.0f;
     [SerializeField]
     float TankRotationSpeed = 20.0f;
@@ -32,20 +32,22 @@ public class PlayerController : MonoBehaviour
     {
         return;
     }
-        if (Input.GetKey(KeyCode.W))
-        {
-            MovementSpeed +=0.01f;
-            if (MovementSpeed == MaxMovementSpeed)
-            {
-                MovementSpeed = MaxMovementSpeed;
-            }
-            transform.position += (transform.up * MovementSpeed * Time.deltaTime);
-            
-        }
         if (Input.GetKeyUp(KeyCode.W))
             {
             MovementSpeed = StartingMovementSpeed;
             }
+        if (Input.GetKey(KeyCode.W))
+        {
+            
+            MovementSpeed +=0.001f;
+            if (MovementSpeed >= MaxMovementSpeed)
+            {
+                MovementSpeed = MaxMovementSpeed;
+            }
+            transform.position += (transform.up * MovementSpeed * Time.deltaTime);
+            Debug.Log("Movement Speed:" + MovementSpeed);
+            
+        }
         if (Input.GetKey(KeyCode.A))
         {
             transform.Rotate(0,0, TankRotationSpeed * Time.deltaTime); 
@@ -54,9 +56,20 @@ public class PlayerController : MonoBehaviour
         {
             transform.Rotate(0,0, -TankRotationSpeed * Time.deltaTime); 
         }
+        if (Input.GetKeyUp(KeyCode.S))
+            {
+            MovementSpeed = StartingMovementSpeed;
+            }
         if (Input.GetKey(KeyCode.S))
         {
-            transform.position -= (transform.up * MovementSpeed * Time.deltaTime);
+            MovementSpeed +=0.001f;
+            if (MovementSpeed >= MaxMovementSpeed)
+            {
+                MovementSpeed = MaxMovementSpeed;
+            }
+            transform.position += (transform.up * -MovementSpeed * Time.deltaTime);
+            Debug.Log("Movement Speed:" + MovementSpeed);
+            
         }
         if (Input.GetKey(KeyCode.Q))
         {
