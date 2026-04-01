@@ -29,13 +29,14 @@ public class PlayerController : MonoBehaviour
     {
         PlayerObj = gameObject;
         
-        vcam.Follow = gameObject.transform;
+        
         photonView = PlayerObj.GetComponent<PhotonView>();
         PlayerGun = this.gameObject.transform.GetChild(0).gameObject;
         PlayerSpawning.Instance?.RegisterPlayer(this);
         if (photonView.IsMine == true && PhotonNetwork.IsConnected == true)
         {
         vcam = GameObject.FindWithTag("VCam").GetComponent<CinemachineVirtualCamera>();
+        vcam.Follow = gameObject.transform;
         }
     }
 
