@@ -4,6 +4,7 @@ using UnityEngine;
 using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
+using UnityEngine.UI;
 
 public class PlayerSpawning : MonoBehaviourPunCallbacks
 {
@@ -12,12 +13,14 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
     [SerializeField] private Transform spawnPoint2;
     [SerializeField] private TMP_Text waitingText;
     [SerializeField] private TMP_Text roundResultText;
+    [SerializeField] private Image connectingPanelImage;
     [SerializeField] private int playersToStart = 2;
     [SerializeField] private float roundResetDelay = 1f;
 
     private readonly List<PlayerController> activePlayers = new List<PlayerController>();
     private bool localPlayerSpawned;
     private bool roundEnding;
+    private Color connectingPanelBaseColor = Color.clear;
 
     public static PlayerSpawning Instance { get; private set; }
 
@@ -25,6 +28,11 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
     {
         Instance = this;
         AutoAssignSceneReferences();
+
+        if (connectingPanelImage != null)
+        {
+            connectingPanelBaseColor = connectingPanelImage.color;
+        }
     }
 
     void OnDestroy()
@@ -113,6 +121,8 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
     {
         yield return new WaitForSeconds(roundResetDelay);
 
+        HideRoundResult();
+
         foreach (PlayerController player in activePlayers.ToArray())
         {
             if (player == null || !player.IsMine)
@@ -171,6 +181,8 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
 
     private void ShowWaitingText(string message)
     {
+        SetConnectingPanelAlpha(connectingPanelBaseColor.a);
+
         if (waitingText == null)
         {
             return;
@@ -183,6 +195,8 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
 
     private void HideWaitingText()
     {
+        SetConnectingPanelAlpha(0f);
+
         if (waitingText != null)
         {
             waitingText.gameObject.SetActive(false);
@@ -208,6 +222,18 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
         {
             roundResultText.gameObject.SetActive(false);
         }
+    }
+
+    private void SetConnectingPanelAlpha(float alpha)
+    {
+        if (connectingPanelImage == null)
+        {
+            return;
+        }
+
+        Color panelColor = connectingPanelBaseColor;
+        panelColor.a = alpha;
+        connectingPanelImage.color = panelColor;
     }
 
     private PlayerController GetWinnerAfterDestruction(PlayerController destroyedPlayer)
@@ -266,6 +292,15 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
             if (roundResultTextObject != null)
             {
                 roundResultText = roundResultTextObject.GetComponent<TMP_Text>();
+            }
+        }
+
+        if (connectingPanelImage == null)
+        {
+            GameObject connectingPanelObject = GameObject.Find("ConnectingPanel");
+            if (connectingPanelObject != null)
+            {
+                connectingPanelImage = connectingPanelObject.GetComponent<Image>();
             }
         }
 

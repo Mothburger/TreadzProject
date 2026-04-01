@@ -966,6 +966,7 @@ MonoBehaviour:
   spawnPoint2: {fileID: 110001012}
   waitingText: {fileID: 308144158}
   roundResultText: {fileID: 308144168}
+  connectingPanelImage: {fileID: 41918443}
   playersToStart: 2
   roundResetDelay: 1
 --- !u!1 &1997186186
