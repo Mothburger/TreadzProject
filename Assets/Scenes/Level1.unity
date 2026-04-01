@@ -948,7 +948,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7f8e33154950d14ead23d97e5b27c36, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 6652433193801155410, guid: eba02b8e198e2e54f941ff35a7cb6a58, type: 3}
+  playerPrefab: {fileID: 6652433193801155410, guid: 745ca50c007ef404592f181b392973c7, type: 3}
 --- !u!114 &1758730456
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -961,7 +961,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 278c06f4682886941b2942f31be8ce74, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  playerPrefab: {fileID: 6652433193801155410, guid: eba02b8e198e2e54f941ff35a7cb6a58, type: 3}
+  playerPrefab: {fileID: 6652433193801155410, guid: 745ca50c007ef404592f181b392973c7, type: 3}
   spawnPoint1: {fileID: 110001002}
   spawnPoint2: {fileID: 110001012}
   waitingText: {fileID: 308144158}
