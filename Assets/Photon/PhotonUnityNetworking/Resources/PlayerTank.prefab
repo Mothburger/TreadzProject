@@ -356,8 +356,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 92ccc33abf9192b4d8137cb1761fc00e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  vcam: {fileID: 0}
-  StartingMovementSpeed: 0
+  StartingMovementSpeed: 2
   MaxMovementSpeed: 5
   TankRotationSpeed: 45
   GunRotationSpeed: 45

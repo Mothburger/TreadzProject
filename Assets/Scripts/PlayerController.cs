@@ -15,7 +15,6 @@ public class PlayerController : MonoBehaviour
     private Vector3 startingPosition;
     private Quaternion startingRotation;
     private int playerSlot = -1;
-    [SerializeField]
     CinemachineVirtualCamera vcam;
     [SerializeField]
     float StartingMovementSpeed = 0.0f;
@@ -29,11 +28,15 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         PlayerObj = gameObject;
-        vcam = GameObject.FindWithTag("VCam").GetComponent<CinemachineVirtualCamera>();
+        
         vcam.Follow = gameObject.transform;
         photonView = PlayerObj.GetComponent<PhotonView>();
         PlayerGun = this.gameObject.transform.GetChild(0).gameObject;
         PlayerSpawning.Instance?.RegisterPlayer(this);
+        if (photonView.IsMine == true && PhotonNetwork.IsConnected == true)
+        {
+        vcam = GameObject.FindWithTag("VCam").GetComponent<CinemachineVirtualCamera>();
+        }
     }
 
     void OnDestroy()
@@ -63,7 +66,7 @@ public class PlayerController : MonoBehaviour
         if (Input.GetKey(KeyCode.W))
         {
             
-            MovementSpeed +=0.001f;
+            MovementSpeed +=0.005f;
             if (MovementSpeed >= MaxMovementSpeed)
             {
                 MovementSpeed = MaxMovementSpeed;
