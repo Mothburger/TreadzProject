@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Photon.Pun;
+using Photon.Realtime;
 
 public class PlayerController : MonoBehaviour
 {
@@ -10,6 +11,9 @@ public class PlayerController : MonoBehaviour
     GameObject PlayerGun;
     PhotonView photonView;
     private bool isDestroyed;
+    private Vector3 startingPosition;
+    private Quaternion startingRotation;
+    private int playerSlot = -1;
     [SerializeField]
     float StartingMovementSpeed = 0.0f;
     [SerializeField]
@@ -24,6 +28,15 @@ public class PlayerController : MonoBehaviour
         PlayerObj = gameObject;
         photonView = PlayerObj.GetComponent<PhotonView>();
         PlayerGun = this.gameObject.transform.GetChild(0).gameObject;
+        PlayerSpawning.Instance?.RegisterPlayer(this);
+    }
+
+    void OnDestroy()
+    {
+        if (PlayerSpawning.Instance != null)
+        {
+            PlayerSpawning.Instance.UnregisterPlayer(this);
+        }
     }
 
     // Update is called once per frame
@@ -116,5 +129,67 @@ public class PlayerController : MonoBehaviour
             rigidbody.angularVelocity = 0f;
             rigidbody.simulated = false;
         }
+
+        PlayerSpawning.Instance?.HandleTankDestroyed(this);
+    }
+
+    [PunRPC]
+    public void RespawnTank(Vector3 spawnPosition, Quaternion spawnRotation)
+    {
+        startingPosition = spawnPosition;
+        startingRotation = spawnRotation;
+        isDestroyed = false;
+        MovementSpeed = StartingMovementSpeed;
+
+        transform.SetPositionAndRotation(spawnPosition, spawnRotation);
+
+        foreach (var renderer in GetComponentsInChildren<SpriteRenderer>(true))
+        {
+            renderer.enabled = true;
+        }
+
+        foreach (var collider in GetComponentsInChildren<Collider2D>(true))
+        {
+            collider.enabled = true;
+        }
+
+        foreach (var rigidbody in GetComponentsInChildren<Rigidbody2D>(true))
+        {
+            rigidbody.velocity = Vector2.zero;
+            rigidbody.angularVelocity = 0f;
+            rigidbody.simulated = true;
+        }
+    }
+
+    public void SetSpawnData(Vector3 spawnPosition, Quaternion spawnRotation, int slotIndex)
+    {
+        startingPosition = spawnPosition;
+        startingRotation = spawnRotation;
+        playerSlot = slotIndex;
+    }
+
+    public void BroadcastRespawn()
+    {
+        photonView.RPC(nameof(RespawnTank), RpcTarget.AllBuffered, startingPosition, startingRotation);
+    }
+
+    public bool IsDestroyed => isDestroyed;
+
+    public bool IsMine => photonView != null && photonView.IsMine;
+
+    public int OwnerActorNumber => photonView != null && photonView.Owner != null ? photonView.OwnerActorNr : -1;
+
+    public Player Owner => photonView != null ? photonView.Owner : null;
+
+    public string GetRoundLabel()
+    {
+        if (playerSlot >= 0)
+        {
+            return $"Player {playerSlot + 1}";
+        }
+
+        return photonView != null && photonView.Owner != null
+            ? $"Player {photonView.OwnerActorNr}"
+            : "Player";
     }
 }
