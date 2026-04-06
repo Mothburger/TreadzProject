@@ -52,6 +52,12 @@ public class Bullet : MonoBehaviourPun, IPunInstantiateMagicCallback
             return;
         }
 
+        if (otherObject.CompareTag("Wall"))
+        {
+            PhotonNetwork.Destroy(gameObject);
+            return;
+        }
+
         Room currentRoom = PhotonNetwork.CurrentRoom;
         if (currentRoom == null || currentRoom.PlayerCount != 2)
         {
