@@ -11,6 +11,7 @@ public class PlayerController : MonoBehaviour
     ///Transform GunTransform;
     GameObject PlayerGun;
     PhotonView photonView;
+    public GameObject AimReticle;
     private bool isDestroyed;
     private Vector3 startingPosition;
     private Quaternion startingRotation;
@@ -28,8 +29,6 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         PlayerObj = gameObject;
-        
-        
         photonView = PlayerObj.GetComponent<PhotonView>();
         PlayerGun = this.gameObject.transform.GetChild(0).gameObject;
         PlayerSpawning.Instance?.RegisterPlayer(this);
@@ -99,15 +98,11 @@ public class PlayerController : MonoBehaviour
             //Debug.Log("Movement Speed:" + MovementSpeed);
             
         }
-        if (Input.GetKey(KeyCode.Q))
-        {
-            PlayerGun.transform.Rotate(0,0, GunRotationSpeed * Time.deltaTime); 
-        }
-        if (Input.GetKey(KeyCode.E))
-        {
-            PlayerGun.transform.Rotate(0,0, -GunRotationSpeed * Time.deltaTime); 
-        }
-        
+       
+        Vector2 direction = AimReticle.transform.position - PlayerGun.transform.position;
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90;
+        Quaternion targetRotation = Quaternion.Euler(0, 0, angle);
+        PlayerGun.transform.rotation = Quaternion.Slerp(PlayerGun.transform.rotation, targetRotation, Time.deltaTime * GunRotationSpeed);
     
     }
 

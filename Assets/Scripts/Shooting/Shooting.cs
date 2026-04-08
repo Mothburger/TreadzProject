@@ -8,7 +8,8 @@ public class Shooting : MonoBehaviour
     [SerializeField] private GameObject bulletPrefab;
     [SerializeField] private float bulletSpeed = 10f;
     [SerializeField] private Transform firePoint;
-
+    [SerializeField] private float shootDelay = 1.0f; 
+    private float shootTimer = 0f;
     private PhotonView photonView;
 
     void Start()
@@ -23,10 +24,11 @@ public class Shooting : MonoBehaviour
         {
             return;
         }
-
-        if (Input.GetKeyDown(KeyCode.Space))
+        shootTimer += Time.deltaTime;
+        if ((Input.GetKeyDown(KeyCode.Space) && shootTimer >= shootDelay))
         {
             Shoot();
+            shootTimer = 0f;
         }
     }
 
