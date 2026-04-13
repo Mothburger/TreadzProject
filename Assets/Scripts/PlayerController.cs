@@ -26,17 +26,15 @@ public class PlayerController : MonoBehaviour
     float TankRotationSpeed = 20.0f;
     [SerializeField]
     float GunRotationSpeed = 20.0f;
+    FollowPlayer FollowPlayerScript; 
     void Start()
     {
         PlayerObj = gameObject;
         photonView = PlayerObj.GetComponent<PhotonView>();
         PlayerGun = this.gameObject.transform.GetChild(0).gameObject;
+        AimReticle = GameObject.Find("MouseObject");
+        FollowPlayerScript.PlayerObj = PlayerObj;
         PlayerSpawning.Instance?.RegisterPlayer(this);
-        if (photonView.IsMine == true && PhotonNetwork.IsConnected == true)
-        {
-        vcam = GameObject.FindWithTag("VCam").GetComponent<CinemachineVirtualCamera>();
-        vcam.Follow = gameObject.transform;
-        }
     }
 
     void OnDestroy()
