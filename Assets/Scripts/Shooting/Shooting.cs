@@ -25,7 +25,7 @@ public class Shooting : MonoBehaviour
             return;
         }
         shootTimer += Time.deltaTime;
-        if ((Input.GetKeyDown(KeyCode.Space) && shootTimer >= shootDelay))
+        if ((Input.GetKeyDown(KeyCode.Mouse0) && shootTimer >= shootDelay))
         {
             Shoot();
             shootTimer = 0f;

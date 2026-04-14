@@ -137,6 +137,7 @@ MonoBehaviour:
   bulletPrefab: {fileID: 5018350984501211510, guid: 0bfadb08bfa780c4cbbc7479a68273f4, type: 3}
   bulletSpeed: 10
   firePoint: {fileID: 8187446396321432337}
+  shootDelay: 1
 --- !u!1 &3143170145360073569
 GameObject:
   m_ObjectHideFlags: 0
@@ -356,6 +357,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 92ccc33abf9192b4d8137cb1761fc00e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  AimReticle: {fileID: 0}
+  mouseObjectResourceName: MouseObject
+  mouseBoundsSize: {x: 40, y: 40}
   StartingMovementSpeed: 2
   MaxMovementSpeed: 5
   TankRotationSpeed: 45

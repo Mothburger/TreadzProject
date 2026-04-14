@@ -7,6 +7,8 @@ using Photon.Realtime;
 
 public class PlayerController : MonoBehaviour
 {
+    private const string VirtualCameraTag = "VCam";
+
     GameObject PlayerObj;
     ///Transform GunTransform;
     GameObject PlayerGun;
@@ -17,6 +19,11 @@ public class PlayerController : MonoBehaviour
     private Quaternion startingRotation;
     private int playerSlot = -1;
     CinemachineVirtualCamera vcam;
+    private GameObject localAimReticle;
+    private GameObject localCameraBounds;
+    private CinemachineTargetGroup localCameraTargetGroup;
+    [SerializeField] private string mouseObjectResourceName = "MouseObject";
+    [SerializeField] private Vector2 mouseBoundsSize = new Vector2(40f, 40f);
     [SerializeField]
     float StartingMovementSpeed = 0.0f;
     [SerializeField]
@@ -31,9 +38,13 @@ public class PlayerController : MonoBehaviour
     {
         PlayerObj = gameObject;
         photonView = PlayerObj.GetComponent<PhotonView>();
-        PlayerGun = this.gameObject.transform.GetChild(0).gameObject;
-        AimReticle = GameObject.Find("MouseObject");
-        FollowPlayerScript.PlayerObj = PlayerObj;
+        PlayerGun = transform.childCount > 0 ? transform.GetChild(0).gameObject : null;
+
+        if (IsLocalOwner())
+        {
+            SetupLocalOwnerFollowTargets();
+        }
+
         PlayerSpawning.Instance?.RegisterPlayer(this);
     }
 
@@ -42,6 +53,21 @@ public class PlayerController : MonoBehaviour
         if (PlayerSpawning.Instance != null)
         {
             PlayerSpawning.Instance.UnregisterPlayer(this);
+        }
+
+        if (localAimReticle != null)
+        {
+            Destroy(localAimReticle);
+        }
+
+        if (localCameraBounds != null)
+        {
+            Destroy(localCameraBounds);
+        }
+
+        if (localCameraTargetGroup != null)
+        {
+            Destroy(localCameraTargetGroup.gameObject);
         }
     }
 
@@ -53,7 +79,7 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        if (photonView.IsMine == false && PhotonNetwork.IsConnected == true)
+        if (!IsLocalOwner())
         {
             return;
         }
@@ -97,11 +123,86 @@ public class PlayerController : MonoBehaviour
             
         }
        
-        Vector2 direction = AimReticle.transform.position - PlayerGun.transform.position;
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90;
-        Quaternion targetRotation = Quaternion.Euler(0, 0, angle);
-        PlayerGun.transform.rotation = Quaternion.Slerp(PlayerGun.transform.rotation, targetRotation, Time.deltaTime * GunRotationSpeed);
+        if (AimReticle != null && PlayerGun != null)
+        {
+            Vector2 direction = AimReticle.transform.position - PlayerGun.transform.position;
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90;
+            Quaternion targetRotation = Quaternion.Euler(0, 0, angle);
+            PlayerGun.transform.rotation = Quaternion.Slerp(PlayerGun.transform.rotation, targetRotation, Time.deltaTime * GunRotationSpeed);
+        }
     
+    }
+
+    private bool IsLocalOwner()
+    {
+        return photonView == null || photonView.IsMine || !PhotonNetwork.IsConnected;
+    }
+
+    private void SetupLocalOwnerFollowTargets()
+    {
+        CreateCameraBoundsFollower();
+        CreateAimReticle();
+        HookCameraToLocalTargets();
+    }
+
+    private void CreateCameraBoundsFollower()
+    {
+        localCameraBounds = new GameObject("Local Mouse BoundingBox");
+        localCameraBounds.transform.position = transform.position;
+
+        BoxCollider2D boundsCollider = localCameraBounds.AddComponent<BoxCollider2D>();
+        boundsCollider.isTrigger = true;
+        boundsCollider.size = mouseBoundsSize;
+
+        FollowPlayerScript = localCameraBounds.AddComponent<FollowPlayer>();
+        FollowPlayerScript.SetPlayer(PlayerObj);
+    }
+
+    private void CreateAimReticle()
+    {
+        if (AimReticle == null)
+        {
+            GameObject mousePrefab = Resources.Load<GameObject>(mouseObjectResourceName);
+            AimReticle = mousePrefab != null
+                ? Instantiate(mousePrefab, transform.position, Quaternion.identity)
+                : new GameObject("MouseObject");
+        }
+
+        AimReticle.name = "MouseObject";
+        localAimReticle = AimReticle;
+
+        MouseFollow mouseFollow = AimReticle.GetComponent<MouseFollow>();
+        if (mouseFollow != null)
+        {
+            mouseFollow.SetCameraBounds(localCameraBounds);
+        }
+    }
+
+    private void HookCameraToLocalTargets()
+    {
+        if (vcam == null)
+        {
+            GameObject virtualCameraObject = GameObject.FindWithTag(VirtualCameraTag);
+            vcam = virtualCameraObject != null
+                ? virtualCameraObject.GetComponent<CinemachineVirtualCamera>()
+                : FindObjectOfType<CinemachineVirtualCamera>();
+        }
+
+        if (vcam == null)
+        {
+            return;
+        }
+
+        GameObject targetGroupObject = new GameObject("Local Camera Target Group");
+        localCameraTargetGroup = targetGroupObject.AddComponent<CinemachineTargetGroup>();
+        localCameraTargetGroup.m_Targets = new[]
+        {
+            new CinemachineTargetGroup.Target { target = transform, weight = 1f, radius = 4f },
+            new CinemachineTargetGroup.Target { target = AimReticle.transform, weight = 1f, radius = 0f }
+        };
+
+        vcam.Follow = localCameraTargetGroup.transform;
+        vcam.LookAt = localCameraTargetGroup.transform;
     }
 
     [PunRPC]
