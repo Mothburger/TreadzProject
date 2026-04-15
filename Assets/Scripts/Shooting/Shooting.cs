@@ -8,6 +8,7 @@ public class Shooting : MonoBehaviour
     [SerializeField] private GameObject bulletPrefab;
     [SerializeField] private float bulletSpeed = 10f;
     [SerializeField] private Transform firePoint;
+    [SerializeField] private AudioSource shootAudioSource;
     [SerializeField] private float shootDelay = 1.0f; 
     private float shootTimer = 0f;
     private PhotonView photonView;
@@ -40,6 +41,8 @@ public class Shooting : MonoBehaviour
             return;
         }
 
+        PlayShootAudioForAllPlayers();
+
         Vector2 fireDirection = firePoint.up;
         GameObject bullet = PhotonNetwork.Instantiate(
             bulletPrefab.name,
@@ -61,5 +64,27 @@ public class Shooting : MonoBehaviour
         {
             destroyScript.BeginCountdown();
         }
+    }
+
+    private void PlayShootAudioForAllPlayers()
+    {
+        if (photonView != null && PhotonNetwork.IsConnected)
+        {
+            photonView.RPC(nameof(PlayShootAudio), RpcTarget.All);
+            return;
+        }
+
+        PlayShootAudio();
+    }
+
+    [PunRPC]
+    private void PlayShootAudio()
+    {
+        if (shootAudioSource == null)
+        {
+            return;
+        }
+
+        shootAudioSource.Play();
     }
 }

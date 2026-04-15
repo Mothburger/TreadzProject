@@ -25,7 +25,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private string mouseObjectResourceName = "MouseObject";
     [SerializeField] private Vector2 mouseBoundsSize = new Vector2(40f, 40f);
     [SerializeField]
-    float StartingMovementSpeed = 0.0f;
+    float StartingMovementSpeed = 2.0f;
     [SerializeField]
     float MaxMovementSpeed = 5.0f;
     float MovementSpeed = 0.0f;
@@ -33,6 +33,11 @@ public class PlayerController : MonoBehaviour
     float TankRotationSpeed = 20.0f;
     [SerializeField]
     float GunRotationSpeed = 20.0f;
+    [SerializeField] private AudioSource movementAudioSource;
+    [SerializeField] private AudioSource rotationAudioSource;
+    [SerializeField] private AudioSource explosionAudioSource;
+    private bool movementAudioPlaying;
+    private bool rotationAudioPlaying;
     FollowPlayer FollowPlayerScript; 
     void Start()
     {
@@ -83,6 +88,13 @@ public class PlayerController : MonoBehaviour
         {
             return;
         }
+
+        bool isMovingInputHeld = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.S);
+        bool isRotatingInputHeld = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.D);
+
+        SetMovementAudioForAllPlayers(isMovingInputHeld);
+        SetRotationAudioForAllPlayers(isRotatingInputHeld);
+
         if (Input.GetKeyUp(KeyCode.W))
         {
             MovementSpeed = StartingMovementSpeed;
@@ -215,6 +227,16 @@ public class PlayerController : MonoBehaviour
 
         isDestroyed = true;
         MovementSpeed = 0f;
+        movementAudioPlaying = false;
+        rotationAudioPlaying = false;
+
+        SetAudioPlaying(movementAudioSource, false);
+        SetAudioPlaying(rotationAudioSource, false);
+
+        if (explosionAudioSource != null)
+        {
+            explosionAudioSource.Play();
+        }
 
         foreach (var renderer in GetComponentsInChildren<SpriteRenderer>(true))
         {
@@ -243,6 +265,11 @@ public class PlayerController : MonoBehaviour
         startingRotation = spawnRotation;
         isDestroyed = false;
         MovementSpeed = StartingMovementSpeed;
+        movementAudioPlaying = false;
+        rotationAudioPlaying = false;
+
+        SetAudioPlaying(movementAudioSource, false);
+        SetAudioPlaying(rotationAudioSource, false);
 
         transform.SetPositionAndRotation(spawnPosition, spawnRotation);
 
@@ -294,5 +321,78 @@ public class PlayerController : MonoBehaviour
         return photonView != null && photonView.Owner != null
             ? $"Player {photonView.OwnerActorNr}"
             : "Player";
+    }
+
+    private void SetMovementAudioForAllPlayers(bool shouldPlay)
+    {
+        if (movementAudioPlaying == shouldPlay)
+        {
+            return;
+        }
+
+        movementAudioPlaying = shouldPlay;
+
+        if (photonView != null && PhotonNetwork.IsConnected)
+        {
+            photonView.RPC(nameof(SetMovementAudioPlaying), RpcTarget.All, shouldPlay);
+            return;
+        }
+
+        SetMovementAudioPlaying(shouldPlay);
+    }
+
+    private void SetRotationAudioForAllPlayers(bool shouldPlay)
+    {
+        if (rotationAudioPlaying == shouldPlay)
+        {
+            return;
+        }
+
+        rotationAudioPlaying = shouldPlay;
+
+        if (photonView != null && PhotonNetwork.IsConnected)
+        {
+            photonView.RPC(nameof(SetRotationAudioPlaying), RpcTarget.All, shouldPlay);
+            return;
+        }
+
+        SetRotationAudioPlaying(shouldPlay);
+    }
+
+    [PunRPC]
+    private void SetMovementAudioPlaying(bool shouldPlay)
+    {
+        movementAudioPlaying = shouldPlay;
+        SetAudioPlaying(movementAudioSource, shouldPlay);
+    }
+
+    [PunRPC]
+    private void SetRotationAudioPlaying(bool shouldPlay)
+    {
+        rotationAudioPlaying = shouldPlay;
+        SetAudioPlaying(rotationAudioSource, shouldPlay);
+    }
+
+    private void SetAudioPlaying(AudioSource audioSource, bool shouldPlay)
+    {
+        if (audioSource == null)
+        {
+            return;
+        }
+
+        if (shouldPlay)
+        {
+            if (!audioSource.isPlaying)
+            {
+                audioSource.Play();
+            }
+
+            return;
+        }
+
+        if (audioSource.isPlaying)
+        {
+            audioSource.Stop();
+        }
     }
 }

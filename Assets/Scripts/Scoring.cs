@@ -1,69 +1,368 @@
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine;
+using Photon.Pun;
+using Photon.Realtime;
 using TMPro;
+using UnityEngine;
+using UnityEngine.SceneManagement;
 
-public class Scoring : MonoBehaviour
+public class Scoring : MonoBehaviourPunCallbacks
 {
-    public Map[] maps;
-    public TMP_Text score1Text;
-    public TMP_Text score2Text;
-    public int p1Score;
-    public int p2Score;
-    public int p1RoundsWon;
-    public int p2RoundsWon;
-    public int pointsPerRound;
-    public int numRounds;
+    private const int MainMenuSceneIndex = 0;
+    private const int LevelSceneIndex = 1;
+
+    [SerializeField] private GameObject winOverlay;
+    [SerializeField] private Transform pointsGroup;
+    [SerializeField] private TMP_Text playerPointsTextTemplate;
+    [SerializeField] private TMP_Text pointsToWinText;
+    [SerializeField] private TMP_Text popupText;
+    [SerializeField] private AudioSource music;
+    [SerializeField] private AudioSource matchResultAudioSource;
+    [SerializeField] private AudioClip winSound;
+    [SerializeField] private AudioClip loseSound;
+    [SerializeField] private int pointsToWin = 10;
+    [SerializeField] private float returnToMenuDelay = 3f;
+
+    private readonly Dictionary<int, int> playerScores = new Dictionary<int, int>();
+    private readonly Dictionary<int, TMP_Text> playerScoreTexts = new Dictionary<int, TMP_Text>();
+    private bool gameEnded;
+    private bool matchResultSoundPlayed;
+
+    public static Scoring Instance { get; private set; }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void BootstrapCurrentScene()
+    {
+        SceneManager.sceneLoaded += BootstrapScene;
+        BootstrapScene(SceneManager.GetActiveScene(), LoadSceneMode.Single);
+    }
+
+    private static void BootstrapScene(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.buildIndex != LevelSceneIndex && scene.name != "Level1")
+        {
+            return;
+        }
+
+        if (FindObjectOfType<Scoring>() != null)
+        {
+            return;
+        }
+
+        new GameObject("Scoring").AddComponent<Scoring>();
+    }
+
+    private void Awake()
+    {
+        Instance = this;
+        AutoAssignSceneReferences();
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
 
     private void Start()
     {
-        p1Score = 0;
-        p2Score = 0;
-        p1RoundsWon = 0;
-        p2RoundsWon = 0;
+        RefreshPlayers();
+        UpdatePointsToWinText();
+        HidePopup();
     }
 
-
-    public void P1GetPoint()
+    public override void OnPlayerEnteredRoom(Player newPlayer)
     {
-        p1Score++;
-        score1Text.text = p1Score.ToString();
+        RefreshPlayers();
     }
 
-    public void P2GetPoint()
+    public override void OnPlayerLeftRoom(Player otherPlayer)
     {
-        p2Score++;
-        score2Text.text = p2Score.ToString();
+        RefreshPlayers();
     }
 
-    public void SwitchMaps()
+    public override void OnLeftRoom()
     {
-        foreach (Map map in maps)
+        SceneManager.LoadScene(MainMenuSceneIndex);
+    }
+
+    public bool AwardPoint(Player winningPlayer)
+    {
+        if (winningPlayer == null || gameEnded)
         {
-            map.gameObject.SetActive(false);
+            return false;
         }
 
-        maps[Random.Range(0, maps.Length)].gameObject.SetActive(true);
+        RefreshPlayers();
 
+        int actorNumber = winningPlayer.ActorNumber;
+        if (!playerScores.ContainsKey(actorNumber))
+        {
+            playerScores[actorNumber] = 0;
+        }
 
+        playerScores[actorNumber]++;
+        string playerName = GetPlayerDisplayName(winningPlayer);
+
+        RefreshScoreTexts();
+
+        if (playerScores[actorNumber] >= pointsToWin)
+        {
+            gameEnded = true;
+            music.Stop();
+            winOverlay.SetActive(true);
+            ShowPopup($"{playerName} wins!");
+            PlayMatchResultSound(winningPlayer);
+            StartCoroutine(ReturnToMainMenuAfterDelay());
+            return true;
+        }
+
+        ShowPopup($"{playerName} scored! ({playerScores[actorNumber]}/{pointsToWin})");
+        return false;
     }
 
-    public void CheckPoints()
+    public string GetPlayerDisplayName(Player player)
     {
-        if (p1Score > pointsPerRound) 
+        if (player == null)
         {
-            p1RoundsWon++;
-
-            p1Score = 0; p2Score = 0;
+            return "Player";
         }
 
-        if (p2Score > pointsPerRound)
-        {
-            p2RoundsWon++;
+        return string.IsNullOrWhiteSpace(player.NickName)
+            ? $"guest{player.ActorNumber}"
+            : player.NickName;
+    }
 
-            p1Score = 0; p2Score = 0;
+    private IEnumerator ReturnToMainMenuAfterDelay()
+    {
+        yield return new WaitForSeconds(returnToMenuDelay);
+
+        if (PhotonNetwork.InRoom)
+        {
+            PhotonNetwork.LeaveRoom();
+            yield break;
         }
 
+        SceneManager.LoadScene(MainMenuSceneIndex);
+    }
 
+    private void RefreshPlayers()
+    {
+        foreach (Player player in PhotonNetwork.PlayerList)
+        {
+            if (player == null)
+            {
+                continue;
+            }
+
+            if (!playerScores.ContainsKey(player.ActorNumber))
+            {
+                playerScores[player.ActorNumber] = 0;
+            }
+        }
+
+        RemoveScoresForMissingPlayers();
+        RebuildScoreTexts();
+        RefreshScoreTexts();
+    }
+
+    private void RebuildScoreTexts()
+    {
+        if (playerPointsTextTemplate == null)
+        {
+            return;
+        }
+
+        if (pointsGroup == null)
+        {
+            pointsGroup = playerPointsTextTemplate.transform.parent;
+        }
+
+        foreach (TMP_Text scoreText in playerScoreTexts.Values)
+        {
+            if (scoreText != null && scoreText != playerPointsTextTemplate)
+            {
+                Destroy(scoreText.gameObject);
+            }
+        }
+
+        playerScoreTexts.Clear();
+
+        Player[] players = PhotonNetwork.PlayerList;
+        for (int i = 0; i < players.Length; i++)
+        {
+            Player player = players[i];
+            if (player == null)
+            {
+                continue;
+            }
+
+            TMP_Text scoreText = i == 0
+                ? playerPointsTextTemplate
+                : Instantiate(playerPointsTextTemplate, pointsGroup);
+
+            scoreText.name = $"PlayerPointsText_{player.ActorNumber}";
+            scoreText.gameObject.SetActive(true);
+            playerScoreTexts[player.ActorNumber] = scoreText;
+        }
+
+        if (players.Length == 0)
+        {
+            playerPointsTextTemplate.gameObject.SetActive(false);
+        }
+    }
+
+    private void RemoveScoresForMissingPlayers()
+    {
+        List<int> actorNumbersToRemove = new List<int>();
+
+        foreach (int actorNumber in playerScores.Keys)
+        {
+            if (GetPlayerByActorNumber(actorNumber) != null)
+            {
+                continue;
+            }
+
+            actorNumbersToRemove.Add(actorNumber);
+        }
+
+        foreach (int actorNumber in actorNumbersToRemove)
+        {
+            playerScores.Remove(actorNumber);
+        }
+    }
+
+    private void RefreshScoreTexts()
+    {
+        foreach (Player player in PhotonNetwork.PlayerList)
+        {
+            if (player == null || !playerScoreTexts.TryGetValue(player.ActorNumber, out TMP_Text scoreText) || scoreText == null)
+            {
+                continue;
+            }
+
+            int score = playerScores.TryGetValue(player.ActorNumber, out int storedScore) ? storedScore : 0;
+            scoreText.text = $"{GetPlayerDisplayName(player)}: {score}";
+        }
+    }
+
+    private Player GetPlayerByActorNumber(int actorNumber)
+    {
+        foreach (Player player in PhotonNetwork.PlayerList)
+        {
+            if (player != null && player.ActorNumber == actorNumber)
+            {
+                return player;
+            }
+        }
+
+        return null;
+    }
+
+    private void ShowPopup(string message)
+    {
+        if (popupText == null)
+        {
+            return;
+        }
+
+        popupText.text = message;
+        popupText.gameObject.SetActive(true);
+    }
+
+    private void HidePopup()
+    {
+        if (popupText != null)
+        {
+            popupText.gameObject.SetActive(false);
+        }
+    }
+
+    private void PlayMatchResultSound(Player winningPlayer)
+    {
+        if (matchResultSoundPlayed)
+        {
+            return;
+        }
+
+        matchResultSoundPlayed = true;
+
+        bool localPlayerWon = PhotonNetwork.LocalPlayer != null &&
+            winningPlayer != null &&
+            PhotonNetwork.LocalPlayer.ActorNumber == winningPlayer.ActorNumber;
+
+        AudioClip resultClip = localPlayerWon ? winSound : loseSound;
+        if (resultClip == null)
+        {
+            return;
+        }
+
+        if (matchResultAudioSource == null)
+        {
+            matchResultAudioSource = GetComponent<AudioSource>();
+        }
+
+        if (matchResultAudioSource == null)
+        {
+            matchResultAudioSource = gameObject.AddComponent<AudioSource>();
+        }
+
+        matchResultAudioSource.playOnAwake = false;
+        matchResultAudioSource.spatialBlend = 0f;
+        matchResultAudioSource.PlayOneShot(resultClip);
+    }
+
+    private void UpdatePointsToWinText()
+    {
+        if (pointsToWinText != null)
+        {
+            pointsToWinText.text = $"Points To Win: {pointsToWin}";
+        }
+    }
+
+    private void AutoAssignSceneReferences()
+    {
+        if (pointsGroup == null)
+        {
+            GameObject pointsGroupObject = GameObject.Find("PointsGroup");
+            if (pointsGroupObject != null)
+            {
+                pointsGroup = pointsGroupObject.transform;
+            }
+        }
+
+        if (playerPointsTextTemplate == null)
+        {
+            GameObject playerPointsTextObject = GameObject.Find("PlayerPointsText");
+            if (playerPointsTextObject != null)
+            {
+                playerPointsTextTemplate = playerPointsTextObject.GetComponent<TMP_Text>();
+            }
+        }
+
+        if (pointsToWinText == null)
+        {
+            GameObject pointsToWinTextObject = GameObject.Find("PointsToWinText");
+            if (pointsToWinTextObject != null)
+            {
+                pointsToWinText = pointsToWinTextObject.GetComponent<TMP_Text>();
+            }
+        }
+
+        if (popupText == null)
+        {
+            GameObject popupTextObject = GameObject.Find("RoundResultText");
+            if (popupTextObject != null)
+            {
+                popupText = popupTextObject.GetComponent<TMP_Text>();
+            }
+        }
+
+        if (matchResultAudioSource == null)
+        {
+            matchResultAudioSource = GetComponent<AudioSource>();
+        }
     }
 }

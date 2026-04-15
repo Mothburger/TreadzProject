@@ -5,17 +5,21 @@ using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
 using UnityEngine.UI;
+using PhotonHashtable = ExitGames.Client.Photon.Hashtable;
 
 public class PlayerSpawning : MonoBehaviourPunCallbacks
 {
     [SerializeField] private PhotonView playerPrefab;
     [SerializeField] private Transform spawnPoint1;
     [SerializeField] private Transform spawnPoint2;
+    [SerializeField] private Transform[] randomSpawnPoints;
     [SerializeField] private TMP_Text waitingText;
     [SerializeField] private TMP_Text roundResultText;
     [SerializeField] private Image connectingPanelImage;
     [SerializeField] private int playersToStart = 2;
     [SerializeField] private float roundResetDelay = 1f;
+
+    private const string RoundSpawnSeedProperty = "RoundSpawnSeed";
 
     private readonly List<PlayerController> activePlayers = new List<PlayerController>();
     private bool localPlayerSpawned;
@@ -46,18 +50,21 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
     void Start()
     {
         UpdateWaitingText();
+        TrySpawnLocalPlayer();
     }
 
     public override void OnJoinedRoom()
     {
         localPlayerSpawned = false;
         roundEnding = false;
+        EnsureRoundSpawnSeed();
         UpdateWaitingText();
         TrySpawnLocalPlayer();
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
+        EnsureRoundSpawnSeed();
         UpdateWaitingText();
         TrySpawnLocalPlayer();
     }
@@ -65,6 +72,7 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
     public override void OnPlayerLeftRoom(Player otherPlayer)
     {
         roundEnding = false;
+        DespawnOwnedNetworkObjectsIfWaiting();
         UpdateWaitingText();
     }
 
@@ -79,19 +87,18 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
 
         if (playerController.IsMine)
         {
-            int playerSlot = GetPlayerSlot(playerController.Owner);
-            Transform spawnPoint = GetSpawnPoint(playerSlot);
-
-            if (spawnPoint != null)
-            {
-                playerController.SetSpawnData(spawnPoint.position, spawnPoint.rotation, playerSlot);
-            }
+            ApplySpawnDataToPlayer(playerController);
         }
     }
 
     public void UnregisterPlayer(PlayerController playerController)
     {
         activePlayers.Remove(playerController);
+
+        if (playerController != null && playerController.IsMine)
+        {
+            localPlayerSpawned = false;
+        }
     }
 
     public void HandleTankDestroyed(PlayerController destroyedPlayer)
@@ -113,13 +120,31 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
         }
 
         roundEnding = true;
-        ShowRoundResult($"{winner.GetRoundLabel()} wins the round!");
+
+        bool gameEnded = Scoring.Instance != null && Scoring.Instance.AwardPoint(winner.Owner);
+        if (gameEnded)
+        {
+            return;
+        }
+
+        ShowRoundResult($"{GetPlayerDisplayName(winner)} scored!");
         StartCoroutine(RespawnRoundAfterDelay());
     }
 
     private IEnumerator RespawnRoundAfterDelay()
     {
         yield return new WaitForSeconds(roundResetDelay);
+
+        if (PhotonNetwork.CurrentRoom == null || PhotonNetwork.CurrentRoom.PlayerCount < playersToStart)
+        {
+            roundEnding = false;
+            DespawnOwnedNetworkObjectsIfWaiting();
+            UpdateWaitingText();
+            yield break;
+        }
+
+        PublishNewRoundSpawnSeed();
+        yield return null;
 
         HideRoundResult();
 
@@ -130,6 +155,7 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
                 continue;
             }
 
+            ApplySpawnDataToPlayer(player);
             player.BroadcastRespawn();
         }
 
@@ -146,6 +172,7 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
 
         if (PhotonNetwork.CurrentRoom == null || PhotonNetwork.CurrentRoom.PlayerCount < playersToStart)
         {
+            DespawnOwnedNetworkObjectsIfWaiting();
             return;
         }
 
@@ -169,6 +196,7 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
 
         if (PhotonNetwork.CurrentRoom.PlayerCount < playersToStart)
         {
+            DespawnOwnedNetworkObjectsIfWaiting();
             ShowWaitingText($"Waiting for players ({PhotonNetwork.CurrentRoom.PlayerCount}/{playersToStart})");
             return;
         }
@@ -251,6 +279,52 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
         return null;
     }
 
+    private void DespawnOwnedNetworkObjectsIfWaiting()
+    {
+        if (!PhotonNetwork.InRoom || PhotonNetwork.CurrentRoom == null || PhotonNetwork.CurrentRoom.PlayerCount >= playersToStart)
+        {
+            return;
+        }
+
+        foreach (PlayerController player in activePlayers.ToArray())
+        {
+            if (player == null || !player.IsMine)
+            {
+                continue;
+            }
+
+            PhotonNetwork.Destroy(player.gameObject);
+        }
+
+        foreach (Bullet bullet in FindObjectsOfType<Bullet>())
+        {
+            PhotonView bulletView = bullet.GetComponent<PhotonView>();
+            if (bulletView != null && bulletView.IsMine)
+            {
+                PhotonNetwork.Destroy(bullet.gameObject);
+            }
+        }
+
+        localPlayerSpawned = false;
+    }
+
+    private string GetPlayerDisplayName(PlayerController player)
+    {
+        if (player == null)
+        {
+            return "Player";
+        }
+
+        if (Scoring.Instance != null)
+        {
+            return Scoring.Instance.GetPlayerDisplayName(player.Owner);
+        }
+
+        return player.Owner != null && !string.IsNullOrWhiteSpace(player.Owner.NickName)
+            ? player.Owner.NickName
+            : player.GetRoundLabel();
+    }
+
     private int GetPlayerSlot(Player player)
     {
         if (player == null)
@@ -272,7 +346,111 @@ public class PlayerSpawning : MonoBehaviourPunCallbacks
 
     private Transform GetSpawnPoint(int playerSlot)
     {
+        Transform[] usableSpawnPoints = GetUsableRandomSpawnPoints();
+        if (usableSpawnPoints.Length > 0)
+        {
+            int[] shuffledIndices = GetShuffledSpawnPointIndices(usableSpawnPoints.Length);
+            int spawnIndex = shuffledIndices[Mathf.Abs(playerSlot) % shuffledIndices.Length];
+            return usableSpawnPoints[spawnIndex];
+        }
+
         return playerSlot == 0 ? spawnPoint1 : spawnPoint2;
+    }
+
+    private void ApplySpawnDataToPlayer(PlayerController playerController)
+    {
+        if (playerController == null)
+        {
+            return;
+        }
+
+        int playerSlot = GetPlayerSlot(playerController.Owner);
+        Transform spawnPoint = GetSpawnPoint(playerSlot);
+
+        if (spawnPoint != null)
+        {
+            playerController.SetSpawnData(spawnPoint.position, spawnPoint.rotation, playerSlot);
+        }
+    }
+
+    private void EnsureRoundSpawnSeed()
+    {
+        if (!PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null || PhotonNetwork.CurrentRoom.PlayerCount < playersToStart)
+        {
+            return;
+        }
+
+        if (PhotonNetwork.CurrentRoom.CustomProperties != null && PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(RoundSpawnSeedProperty))
+        {
+            return;
+        }
+
+        PublishNewRoundSpawnSeed();
+    }
+
+    private void PublishNewRoundSpawnSeed()
+    {
+        if (!PhotonNetwork.IsMasterClient || PhotonNetwork.CurrentRoom == null)
+        {
+            return;
+        }
+
+        PhotonNetwork.CurrentRoom.SetCustomProperties(new PhotonHashtable
+        {
+            { RoundSpawnSeedProperty, Random.Range(1, int.MaxValue) }
+        });
+    }
+
+    private int GetRoundSpawnSeed()
+    {
+        if (PhotonNetwork.CurrentRoom != null &&
+            PhotonNetwork.CurrentRoom.CustomProperties != null &&
+            PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(RoundSpawnSeedProperty, out object seedValue) &&
+            seedValue is int seed)
+        {
+            return seed;
+        }
+
+        return 0;
+    }
+
+    private Transform[] GetUsableRandomSpawnPoints()
+    {
+        if (randomSpawnPoints == null || randomSpawnPoints.Length == 0)
+        {
+            return new Transform[0];
+        }
+
+        List<Transform> usableSpawnPoints = new List<Transform>();
+        foreach (Transform spawnPoint in randomSpawnPoints)
+        {
+            if (spawnPoint != null)
+            {
+                usableSpawnPoints.Add(spawnPoint);
+            }
+        }
+
+        return usableSpawnPoints.ToArray();
+    }
+
+    private int[] GetShuffledSpawnPointIndices(int count)
+    {
+        int[] indices = new int[count];
+        for (int i = 0; i < indices.Length; i++)
+        {
+            indices[i] = i;
+        }
+
+        System.Random random = new System.Random(GetRoundSpawnSeed());
+        for (int i = indices.Length - 1; i > 0; i--)
+        {
+            int swapIndex = random.Next(i + 1);
+            int previousValue = indices[i];
+            indices[i] = indices[swapIndex];
+            indices[swapIndex] = previousValue;
+        }
+
+        return indices;
     }
 
     private void AutoAssignSceneReferences()
