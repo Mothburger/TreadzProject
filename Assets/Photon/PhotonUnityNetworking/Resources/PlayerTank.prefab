@@ -463,7 +463,7 @@ MonoBehaviour:
   mouseBoundsSize: {x: 40, y: 40}
   StartingMovementSpeed: 4
   MaxMovementSpeed: 6
-  TankRotationSpeed: 45
+  TankRotationSpeed: 90
   GunRotationSpeed: 45
   movementAudioSource: {fileID: 7472395187068231965}
   rotationAudioSource: {fileID: 7472395187068231966}
