@@ -1,15 +1,18 @@
 using System.Collections;
 using System.Collections.Generic;
+using ExitGames.Client.Photon;
 using Photon.Pun;
 using Photon.Realtime;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class Scoring : MonoBehaviourPunCallbacks
+public class Scoring : MonoBehaviourPunCallbacks, IOnEventCallback
 {
     private const int MainMenuSceneIndex = 0;
-    private const int LevelSceneIndex = 1;
+    private const string LevelOneSceneName = "Level1";
+    private const string LevelTwoSceneName = "Level2";
+    private const byte ReturnToMenuEventCode = 42;
 
     [SerializeField] private GameObject winOverlay;
     [SerializeField] private Transform pointsGroup;
@@ -27,6 +30,7 @@ public class Scoring : MonoBehaviourPunCallbacks
     private readonly Dictionary<int, TMP_Text> playerScoreTexts = new Dictionary<int, TMP_Text>();
     private bool gameEnded;
     private bool matchResultSoundPlayed;
+    private bool returningToMenu;
 
     public static Scoring Instance { get; private set; }
 
@@ -39,7 +43,7 @@ public class Scoring : MonoBehaviourPunCallbacks
 
     private static void BootstrapScene(Scene scene, LoadSceneMode mode)
     {
-        if (scene.buildIndex != LevelSceneIndex && scene.name != "Level1")
+        if (scene.name != LevelOneSceneName && scene.name != LevelTwoSceneName)
         {
             return;
         }
@@ -71,6 +75,22 @@ public class Scoring : MonoBehaviourPunCallbacks
         RefreshPlayers();
         UpdatePointsToWinText();
         HidePopup();
+    }
+
+    private void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            RequestReturnToMenu();
+        }
+    }
+
+    public void OnEvent(EventData photonEvent)
+    {
+        if (photonEvent.Code == ReturnToMenuEventCode)
+        {
+            LeaveCurrentRoomForMenu();
+        }
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
@@ -139,10 +159,61 @@ public class Scoring : MonoBehaviourPunCallbacks
     {
         yield return new WaitForSeconds(returnToMenuDelay);
 
+        returningToMenu = true;
+
         if (PhotonNetwork.InRoom)
         {
             PhotonNetwork.LeaveRoom();
             yield break;
+        }
+
+        SceneManager.LoadScene(MainMenuSceneIndex);
+    }
+
+    private void RequestReturnToMenu()
+    {
+        if (returningToMenu)
+        {
+            return;
+        }
+
+        returningToMenu = true;
+
+        if (!PhotonNetwork.InRoom)
+        {
+            SceneManager.LoadScene(MainMenuSceneIndex);
+            return;
+        }
+
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            LeaveCurrentRoomForMenu();
+            return;
+        }
+
+        if (PhotonNetwork.CurrentRoom != null)
+        {
+            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.CurrentRoom.IsVisible = false;
+        }
+
+        RaiseEventOptions options = new RaiseEventOptions { Receivers = ReceiverGroup.All };
+        PhotonNetwork.RaiseEvent(ReturnToMenuEventCode, null, options, SendOptions.SendReliable);
+    }
+
+    private void LeaveCurrentRoomForMenu()
+    {
+        if (returningToMenu && !PhotonNetwork.InRoom)
+        {
+            return;
+        }
+
+        returningToMenu = true;
+
+        if (PhotonNetwork.InRoom)
+        {
+            PhotonNetwork.LeaveRoom();
+            return;
         }
 
         SceneManager.LoadScene(MainMenuSceneIndex);

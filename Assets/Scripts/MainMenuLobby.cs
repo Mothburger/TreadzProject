@@ -10,25 +10,31 @@ using UnityEngine.UI;
 public class MainMenuLobby : MonoBehaviourPunCallbacks
 {
     private const int MainMenuSceneIndex = 0;
-    private const int LevelSceneIndex = 1;
     private const byte MaxPlayers = 2;
     private const string HostNameProperty = "HostName";
+    private const string SceneNameProperty = "SceneName";
+    private const string LevelOneSceneName = "Level1";
+    private const string LevelTwoSceneName = "Level2";
     private const string RoomButtonName = "Room Button";
     private const string RoomButtonCompactName = "RoomButton";
 
     [SerializeField] private GameObject startGroup;
     [SerializeField] private GameObject lobbyGroup;
+    [SerializeField] private GameObject mapSelectionPanel;
     [SerializeField] private TMP_InputField nameInput;
     [SerializeField] private Button playButton;
     [SerializeField] private Button quitButton;
     [SerializeField] private Button backButton;
     [SerializeField] private Button refreshButton;
     [SerializeField] private Button createRoomButton;
+    [SerializeField] private Button mapOneButton;
+    [SerializeField] private Button mapTwoButton;
     [SerializeField] private RectTransform roomContent;
     [SerializeField] private Button roomButtonTemplate;
 
     private readonly Dictionary<string, RoomInfo> cachedRooms = new Dictionary<string, RoomInfo>();
     private readonly List<GameObject> spawnedRoomButtons = new List<GameObject>();
+    private string pendingCreateSceneName;
     private bool loadRequested;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -76,6 +82,12 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
 
     public override void OnConnectedToMaster()
     {
+        if (!string.IsNullOrEmpty(pendingCreateSceneName))
+        {
+            CreateRoomForScene(pendingCreateSceneName);
+            return;
+        }
+
         JoinLobbyIfReady();
     }
 
@@ -124,7 +136,7 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
             PhotonNetwork.CurrentRoom.IsVisible = true;
         }
 
-        LoadLevelOne();
+        LoadSelectedLevel();
     }
 
     public override void OnJoinRoomFailed(short returnCode, string message)
@@ -143,20 +155,43 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
     {
         SetGroupActive(startGroup, true);
         SetGroupActive(lobbyGroup, false);
+        SetGroupActive(mapSelectionPanel, false);
     }
 
     public void ShowLobbyGroup()
     {
         SetGroupActive(startGroup, false);
         SetGroupActive(lobbyGroup, true);
+        SetGroupActive(mapSelectionPanel, false);
         JoinLobbyIfReady();
         RefreshRoomButtons();
     }
 
     public void CreateRoom()
     {
+        ShowMapSelectionPanel();
+    }
+
+    public void CreateLevelOneRoom()
+    {
+        CreateRoomForScene(LevelOneSceneName);
+    }
+
+    public void CreateLevelTwoRoom()
+    {
+        CreateRoomForScene(LevelTwoSceneName);
+    }
+
+    public void ShowMapSelectionPanel()
+    {
+        SetGroupActive(mapSelectionPanel, true);
+    }
+
+    private void CreateRoomForScene(string sceneName)
+    {
         string playerName = GetPlayerName();
         PhotonNetwork.NickName = playerName;
+        pendingCreateSceneName = sceneName;
 
         if (!PhotonNetwork.IsConnectedAndReady)
         {
@@ -170,11 +205,17 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
             MaxPlayers = MaxPlayers,
             IsOpen = true,
             IsVisible = true,
-            CustomRoomProperties = new Hashtable { { HostNameProperty, playerName } },
-            CustomRoomPropertiesForLobby = new[] { HostNameProperty },
+            CustomRoomProperties = new Hashtable
+            {
+                { HostNameProperty, playerName },
+                { SceneNameProperty, sceneName }
+            },
+            CustomRoomPropertiesForLobby = new[] { HostNameProperty, SceneNameProperty },
             CleanupCacheOnLeave = true
         };
 
+        SetGroupActive(mapSelectionPanel, false);
+        pendingCreateSceneName = null;
         PhotonNetwork.CreateRoom(roomName, roomOptions, TypedLobby.Default);
     }
 
@@ -261,7 +302,7 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
         PhotonNetwork.JoinLobby();
     }
 
-    private void LoadLevelOne()
+    private void LoadSelectedLevel()
     {
         if (loadRequested)
         {
@@ -269,7 +310,21 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
         }
 
         loadRequested = true;
-        PhotonNetwork.LoadLevel(LevelSceneIndex);
+        PhotonNetwork.LoadLevel(GetCurrentRoomSceneName());
+    }
+
+    private string GetCurrentRoomSceneName()
+    {
+        if (PhotonNetwork.CurrentRoom != null &&
+            PhotonNetwork.CurrentRoom.CustomProperties != null &&
+            PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue(SceneNameProperty, out object sceneName) &&
+            sceneName is string sceneNameString &&
+            !string.IsNullOrWhiteSpace(sceneNameString))
+        {
+            return sceneNameString;
+        }
+
+        return LevelOneSceneName;
     }
 
     private string GetPlayerName()
@@ -290,12 +345,27 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
 
     private string GetRoomDisplayName(RoomInfo room)
     {
+        string mapSuffix = GetRoomMapDisplayName(room);
+
         if (room.CustomProperties != null && room.CustomProperties.TryGetValue(HostNameProperty, out object hostName))
         {
-            return $"{hostName}'s Room ({room.PlayerCount}/{room.MaxPlayers})";
+            return $"{hostName}'s Room{mapSuffix} ({room.PlayerCount}/{room.MaxPlayers})";
         }
 
-        return $"{room.Name} ({room.PlayerCount}/{room.MaxPlayers})";
+        return $"{room.Name}{mapSuffix} ({room.PlayerCount}/{room.MaxPlayers})";
+    }
+
+    private string GetRoomMapDisplayName(RoomInfo room)
+    {
+        if (room.CustomProperties == null ||
+            !room.CustomProperties.TryGetValue(SceneNameProperty, out object sceneName) ||
+            !(sceneName is string sceneNameString) ||
+            string.IsNullOrWhiteSpace(sceneNameString))
+        {
+            return string.Empty;
+        }
+
+        return sceneNameString == LevelTwoSceneName ? " - Map 2" : " - Map 1";
     }
 
     private void AutoAssignSceneReferences()
@@ -308,6 +378,11 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
         if (lobbyGroup == null)
         {
             lobbyGroup = FindSceneObject("LobbyGroup");
+        }
+
+        if (mapSelectionPanel == null)
+        {
+            mapSelectionPanel = FindSceneObject("MapSelectionPanel");
         }
 
         if (nameInput == null)
@@ -340,6 +415,16 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
             createRoomButton = FindNamedComponent<Button>("CreateRoomButton");
         }
 
+        if (mapOneButton == null)
+        {
+            mapOneButton = FindNamedComponent<Button>("Map1Button");
+        }
+
+        if (mapTwoButton == null)
+        {
+            mapTwoButton = FindNamedComponent<Button>("Map2Button");
+        }
+
         GameObject roomSelectorPanel = FindSceneObject("RoomSelectorPanel");
         if (roomContent == null && roomSelectorPanel != null)
         {
@@ -368,6 +453,8 @@ public class MainMenuLobby : MonoBehaviourPunCallbacks
         AddButtonListener(backButton, ShowStartGroup);
         AddButtonListener(refreshButton, RequestRoomRefresh);
         AddButtonListener(createRoomButton, CreateRoom);
+        AddButtonListener(mapOneButton, CreateLevelOneRoom);
+        AddButtonListener(mapTwoButton, CreateLevelTwoRoom);
         AddButtonListener(quitButton, QuitGame);
     }
 
